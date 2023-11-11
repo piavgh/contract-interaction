@@ -41,7 +41,9 @@ impl ContractInteraction {
     }
 
     async fn approve(&self, spender: &Address, amount: U256) -> Result<(), Box<dyn std::error::Error>> {
-        let deposit_token = DepositToken::new(spender.clone(), Arc::new(self.client.clone()));
+        let deposit_token_addr: Address = constant::DEPOSIT_TOKEN.parse()?;
+
+        let deposit_token = DepositToken::new(deposit_token_addr.clone(), Arc::new(self.client.clone()));
 
         let tx = deposit_token
             .approve(spender.clone(), amount)
@@ -117,7 +119,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let client = SignerMiddleware::new_with_provider_chain(provider.clone(), signer.clone()).await.unwrap();
 
-    let contract_interaction = ContractInteraction::new(client.clone());
+    let contract_interaction = ContractInteraction::new(client);
 
     // create a campaign
     // let factory_addr = FACTORY_ADDRESS.parse()?;
