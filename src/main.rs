@@ -1,5 +1,6 @@
 mod constant;
 
+use std::ops::Mul;
 use chrono::{Duration, Utc};
 use ethers::contract::abigen;
 use ethers::middleware::SignerMiddleware;
@@ -45,13 +46,22 @@ impl ContractInteraction {
 
         let deposit_token = DepositToken::new(deposit_token_addr.clone(), Arc::new(self.client.clone()));
 
+        // mint the token
+        let tx = deposit_token
+            .mint(self.client.address(), amount.mul(100))
+            .send()
+            .await?
+            .await?;
+        println!("Mint tokens transaction receipt: {}", serde_json::to_string(&tx)?);
+
+
         let tx = deposit_token
             .approve(spender.clone(), amount)
             .send()
             .await?
             .await?;
 
-        println!("Transaction Receipt: {}", serde_json::to_string(&tx)?);
+        println!("Approve token transaction receipt: {}", serde_json::to_string(&tx)?);
 
         Ok(())
     }
@@ -127,12 +137,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let campaign_addr = "0xfa4be5cbb918e92939171919d6dbbf5349813598".parse()?;
 
-    let amount = 10000000000000000u128.into();
+    let amount = 1000000000000000000u128.into();
 
-    // approve the campaign to spend 10000000000000000u128 so that the transferFrom will not fail
+    // approve the campaign to spend `amount` so that the transferFrom will not fail
     contract_interaction.approve(&campaign_addr, amount).await?;
 
-    // donate 10000000000000000u128 to the campaign
+    // donate to the campaign
     contract_interaction.donate(&campaign_addr, amount).await?;
 
     Ok(())
