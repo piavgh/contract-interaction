@@ -1,17 +1,18 @@
-mod constant;
+use std::sync::Arc;
 
-use std::ops::Mul;
 use chrono::{Duration, Utc};
+use dotenvy::dotenv;
+use ethers::{
+    providers::{Http, Provider},
+    signers::LocalWallet,
+};
 use ethers::contract::abigen;
 use ethers::middleware::SignerMiddleware;
 use ethers::prelude::k256;
 use ethers::signers::Wallet;
 use ethers::types::{Address, U256};
-use ethers::{
-    providers::{Http, Provider},
-    signers::LocalWallet,
-};
-use std::sync::Arc;
+
+mod constant;
 
 type Client = SignerMiddleware<Provider<Http>, Wallet<k256::ecdsa::SigningKey>>;
 
@@ -48,7 +49,7 @@ impl ContractInteraction {
 
         // mint the token
         let tx = deposit_token
-            .mint(self.client.address(), amount.mul(100))
+            .mint(self.client.address(), amount)
             .send()
             .await?
             .await?;
@@ -114,7 +115,7 @@ impl ContractInteraction {
 
         let tx = campaign.donate(amount).send().await?.await?;
 
-        println!("Transaction Receipt: {}", serde_json::to_string(&tx)?);
+        println!("donate transaction receipt: {}", serde_json::to_string(&tx)?);
 
         Ok(())
     }
@@ -123,19 +124,26 @@ impl ContractInteraction {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let provider = Provider::<Http>::try_from(constant::BNB_TESTNET_RPC_URL)?;
+    dotenv().ok();
 
-    let signer: LocalWallet = constant::PRIVATE_KEY.parse::<LocalWallet>()?;
+    let http_rpc_url = std::env::var("HTTP_RPC_URL").expect("HTTP_RPC_URL must be set.");
+    let provider = Provider::<Http>::try_from(http_rpc_url)?;
+
+    let private_key = std::env::var("PRIVATE_KEY").expect("PRIVATE_KEY must be set.");
+
+    let signer: LocalWallet = private_key.parse::<LocalWallet>()?;
 
     let client = SignerMiddleware::new_with_provider_chain(provider.clone(), signer.clone()).await.unwrap();
 
     let contract_interaction = ContractInteraction::new(client);
 
-    // create a campaign
-    // let factory_addr = FACTORY_ADDRESS.parse()?;
-    // contract_interaction.create_campaign(&client, &factory_addr).await?;
+    let factory_addr = std::env::var("FACTORY_ADDRESS").expect("FACTORY_ADDRESS must be set.");
 
-    let campaign_addr = "0xfa4be5cbb918e92939171919d6dbbf5349813598".parse()?;
+    // create a campaign
+    // let factory_addr = factory_addr.parse()?;
+    // contract_interaction.create_campaign(&factory_addr).await?;
+
+    let campaign_addr = "0xc2efab52e5e411c0dc947c1b57654c6ece98793c".parse()?;
 
     let amount = 1000000000000000000u128.into();
 
