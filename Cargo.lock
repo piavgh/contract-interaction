@@ -424,6 +424,7 @@ dependencies = [
  "chrono",
  "dotenvy",
  "ethers",
+ "hex",
  "serde",
  "serde_json",
  "tokio",

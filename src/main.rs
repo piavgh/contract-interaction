@@ -10,13 +10,15 @@ use ethers::contract::abigen;
 use ethers::middleware::SignerMiddleware;
 use ethers::prelude::k256;
 use ethers::signers::Wallet;
-use ethers::types::{Address, U256};
+use ethers::types::{Address, Bytes, U256};
 
-mod constant;
+pub mod metadata;
+pub mod constant;
 
 type Client = SignerMiddleware<Provider<Http>, Wallet<k256::ecdsa::SigningKey>>;
 
-abigen!(DepositToken,
+abigen!(
+    DepositToken,
     "./src/abis/DepositToken.json",
     event_derives(serde::Deserialize, serde::Serialize)
 );
@@ -42,10 +44,27 @@ impl ContractInteraction {
         Self { client }
     }
 
-    async fn approve(&self, spender: &Address, amount: U256) -> Result<(), Box<dyn std::error::Error>> {
+    async fn read_data(&self, contract_addr: &Address) -> Result<(), Box<dyn std::error::Error>> {
+        let campaign = Campaign::new(contract_addr.clone(), Arc::new(self.client.clone()));
+        let metadata: Bytes = campaign.metadata().call().await?;
+        println!("{}", metadata);
+
+        let metadata = metadata::parse_metadata(&metadata.to_string().as_str())?;
+
+        println!("{}", metadata);
+
+        Ok(())
+    }
+
+    async fn approve(
+        &self,
+        spender: &Address,
+        amount: U256,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let deposit_token_addr: Address = constant::DEPOSIT_TOKEN.parse()?;
 
-        let deposit_token = DepositToken::new(deposit_token_addr.clone(), Arc::new(self.client.clone()));
+        let deposit_token =
+            DepositToken::new(deposit_token_addr.clone(), Arc::new(self.client.clone()));
 
         // mint the token
         let tx = deposit_token
@@ -53,8 +72,10 @@ impl ContractInteraction {
             .send()
             .await?
             .await?;
-        println!("Mint tokens transaction receipt: {}", serde_json::to_string(&tx)?);
-
+        println!(
+            "Mint tokens transaction receipt: {}",
+            serde_json::to_string(&tx)?
+        );
 
         let tx = deposit_token
             .approve(spender.clone(), amount)
@@ -62,7 +83,10 @@ impl ContractInteraction {
             .await?
             .await?;
 
-        println!("Approve token transaction receipt: {}", serde_json::to_string(&tx)?);
+        println!(
+            "Approve token transaction receipt: {}",
+            serde_json::to_string(&tx)?
+        );
 
         Ok(())
     }
@@ -71,7 +95,8 @@ impl ContractInteraction {
         &self,
         contract_addr: &Address,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        let campaign_factory = CampaignFactory::new(contract_addr.clone(), Arc::new(self.client.clone()));
+        let campaign_factory =
+            CampaignFactory::new(contract_addr.clone(), Arc::new(self.client.clone()));
 
         let accepted_tokens = campaign_factory.accepted_token_addresses().call().await?;
 
@@ -99,7 +124,8 @@ impl ContractInteraction {
                     campaign_factory::Segment {
                         percentage_bps: 5000u128.into(),
                         milestone: (start_time + Duration::days(60)).timestamp() as u64,
-                    }],
+                    },
+                ],
             })
             .send()
             .await?
@@ -110,17 +136,23 @@ impl ContractInteraction {
         Ok(())
     }
 
-    async fn donate(&self, contract_addr: &Address, amount: U256) -> Result<(), Box<dyn std::error::Error>> {
+    async fn donate(
+        &self,
+        contract_addr: &Address,
+        amount: U256,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let campaign = Campaign::new(contract_addr.clone(), Arc::new(self.client.clone()));
 
         let tx = campaign.donate(amount).send().await?.await?;
 
-        println!("donate transaction receipt: {}", serde_json::to_string(&tx)?);
+        println!(
+            "donate transaction receipt: {}",
+            serde_json::to_string(&tx)?
+        );
 
         Ok(())
     }
 }
-
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -133,7 +165,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let signer: LocalWallet = private_key.parse::<LocalWallet>()?;
 
-    let client = SignerMiddleware::new_with_provider_chain(provider.clone(), signer.clone()).await.unwrap();
+    let client = SignerMiddleware::new_with_provider_chain(provider.clone(), signer.clone())
+        .await
+        .unwrap();
 
     let contract_interaction = ContractInteraction::new(client);
 
@@ -143,15 +177,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // let factory_addr = factory_addr.parse()?;
     // contract_interaction.create_campaign(&factory_addr).await?;
 
-    let campaign_addr = "0xc2efab52e5e411c0dc947c1b57654c6ece98793c".parse()?;
+    let campaign_addr = "0xf921e126c78ebc5b17453e53b9332aa9c17c2607".parse()?;
 
-    let amount = 1000000000000000000u128.into();
+    // let amount = 1000000000000000000u128.into();
+
+    // read the campaign data
+    contract_interaction.read_data(&campaign_addr).await?;
 
     // approve the campaign to spend `amount` so that the transferFrom will not fail
-    contract_interaction.approve(&campaign_addr, amount).await?;
+    // contract_interaction.approve(&campaign_addr, amount).await?;
 
     // donate to the campaign
-    contract_interaction.donate(&campaign_addr, amount).await?;
+    // contract_interaction.donate(&campaign_addr, amount).await?;
 
     Ok(())
 }
